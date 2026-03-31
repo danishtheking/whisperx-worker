@@ -26,31 +26,27 @@ RUN apt-get update -y && \
     apt-get clean -y && \
     rm -rf /var/lib/apt/lists/*
 
-
-# 2.  cache directories
+# 2. Cache directories
 RUN mkdir -p /cache/models /root/.cache/torch
 
-# 3.  clone whisperx *before* pip needs it
-#RUN git clone --depth 1 https://github.com/m-bain/whisperx.git /tmp/whisperx && \
-#    cd /tmp/whisperx && \
-#    git reset --hard 58f00339af7dcc9705ef40d97a1f40764b7cf555
-
-# 4.  requirements file (local copy that uses the clone)
+# 4. Requirements file
 COPY builder/requirements.txt /builder/requirements.txt
 
-# 5.  python dependencies
+# 5. Python dependencies — pin numpy<2 BEFORE everything else
 RUN python3 -m pip install --upgrade pip \
- && python3 -m pip install hf_transfer \ 
+ && python3 -m pip install "numpy<2.0" \
+ && python3 -m pip install hf_transfer \
  && python3 -m pip install --no-cache-dir -r /builder/requirements.txt
 
-# 6.  local VAD model
+# 6. Local VAD model
 COPY models/whisperx-vad-segmentation.bin /root/.cache/torch/whisperx-vad-segmentation.bin
 
-# 7.  builder scripts + model downloader
+# 7. Builder scripts + model downloader
 COPY builder /builder
 RUN chmod +x /builder/download_models.sh
 RUN --mount=type=secret,id=hf_token /builder/download_models.sh
-# 8.  application code
+
+# 8. Application code
 COPY src .
 
 CMD ["python3", "-u", "/rp_handler.py"]
