@@ -29,9 +29,8 @@ RUN apt-get update -y && \
 # 2. Cache directories
 RUN mkdir -p /cache/models /root/.cache/torch /models/faster-whisper-large-v3
 
-# 4. Requirements file + helper scripts
+# 4. Requirements file
 COPY builder/requirements.txt /builder/requirements.txt
-COPY builder/download_pyannote.py /builder/download_pyannote.py
 
 # 5. Python dependencies — pin numpy<2 BEFORE everything else
 RUN python3 -m pip install --upgrade pip \
@@ -54,6 +53,8 @@ RUN wget -q -O /models/faster-whisper-large-v3/config.json "https://huggingface.
 RUN python3 -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='speechbrain/spkrec-ecapa-voxceleb'); print('SpeechBrain ECAPA downloaded')"
 
 # 7c. Download PyAnnote models (separate layer, needs HF token)
+#     Copy helper script here so pip-install layer cache is not invalidated
+COPY builder/download_pyannote.py /builder/download_pyannote.py
 RUN --mount=type=secret,id=hf_token python3 /builder/download_pyannote.py
 
 # 8. Application code
