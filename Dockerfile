@@ -27,7 +27,7 @@ RUN apt-get update -y && \
     rm -rf /var/lib/apt/lists/*
 
 # 2. Cache directories
-RUN mkdir -p /cache/models /root/.cache/torch
+RUN mkdir -p /cache/models /root/.cache/torch /models/faster-whisper-large-v3
 
 # 4. Requirements file
 COPY builder/requirements.txt /builder/requirements.txt
@@ -41,10 +41,30 @@ RUN python3 -m pip install --upgrade pip \
 # 6. Local VAD model
 COPY models/whisperx-vad-segmentation.bin /root/.cache/torch/whisperx-vad-segmentation.bin
 
-# 7. Builder scripts + model downloader
-COPY builder /builder
-RUN chmod +x /builder/download_models.sh
-RUN --mount=type=secret,id=hf_token /builder/download_models.sh
+# 7a. Download Faster Whisper model (separate layer ~3GB)
+RUN wget -q -O /models/faster-whisper-large-v3/config.json "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main/config.json" && \
+    wget -q -O /models/faster-whisper-large-v3/model.bin "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main/model.bin" && \
+    wget -q -O /models/faster-whisper-large-v3/preprocessor_config.json "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main/preprocessor_config.json" && \
+    wget -q -O /models/faster-whisper-large-v3/tokenizer.json "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main/tokenizer.json" && \
+    wget -q -O /models/faster-whisper-large-v3/vocabulary.json "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main/vocabulary.json" && \
+    echo "Faster Whisper model downloaded"
+
+# 7b. Download SpeechBrain ECAPA model (separate layer)
+RUN python3 -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='speechbrain/spkrec-ecapa-voxceleb'); print('SpeechBrain ECAPA downloaded')"
+
+# 7c. Download PyAnnote models (separate layer, needs HF token)
+RUN --mount=type=secret,id=hf_token python3 -c "\
+import os;\
+hf_token = None;\
+try:\
+    hf_token = open('/run/secrets/hf_token').read().strip();\
+except: hf_token = os.environ.get('HF_TOKEN');\
+from huggingface_hub import snapshot_download;\
+snapshot_download(repo_id='pyannote/embedding', token=hf_token);\
+print('pyannote/embedding downloaded');\
+snapshot_download(repo_id='pyannote/speaker-diarization-2.1', token=hf_token);\
+print('pyannote/speaker-diarization-2.1 downloaded');\
+"
 
 # 8. Application code
 COPY src .

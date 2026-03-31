@@ -1,14 +1,11 @@
 #!/bin/bash
-set -e  # Exit immediately if a command exits with a non-zero status
+set -e
 
-# Define cache and model directories
 CACHE_DIR="/cache/models"
 MODELS_DIR="/models"
 
-# Ensure necessary directories exist
 mkdir -p /root/.cache/torch/hub/checkpoints
 
-# Download function with caching
 download() {
   local file_url="$1"
   local destination_path="$2"
@@ -27,9 +24,7 @@ download() {
   cp "$cache_path" "$destination_path"
 }
 
-# ===============================
 # Download Faster Whisper Model
-# ===============================
 faster_whisper_model_dir="${MODELS_DIR}/faster-whisper-large-v3"
 mkdir -p "$faster_whisper_model_dir"
 
@@ -41,40 +36,35 @@ download "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main/vo
 
 echo "Faster Whisper model downloaded."
 
-# ===================================
-# VAD and wav2vec2 are Docker-handled
-# ===================================
-
-# ===================================
-# Python block: Hugging Face downloads using secret
-# ===================================
+# Python block: HF downloads using secret — use 'token' not 'use_auth_token'
 python3 -c "
 import os
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    print('WARNING: python-dotenv not installed, skipping .env loading')
 
-from huggingface_hub import snapshot_download
-
-# Try to read HF token from BuildKit secret file.
 hf_token = None
 try:
     with open('/run/secrets/hf_token', 'r') as f:
         hf_token = f.read().strip()
+        print(f'Read HF token from secret file: {hf_token[:10]}...')
 except Exception as e:
-    print('No secret file found, falling back to environment variable:', e)
+    print(f'No secret file found: {e}')
     hf_token = os.environ.get('HF_TOKEN')
+    if hf_token:
+        print(f'Using HF_TOKEN from env: {hf_token[:10]}...')
 
-# Download SpeechBrain speaker recognition model
+from huggingface_hub import snapshot_download
+
+# Download SpeechBrain (public, no token needed)
 snapshot_download(repo_id='speechbrain/spkrec-ecapa-voxceleb')
+print('SpeechBrain ECAPA downloaded.')
 
-# Optionally download PyAnnote models if HF_TOKEN is set
+# Download PyAnnote models (gated, need token)
 if hf_token:
-    snapshot_download(repo_id='pyannote/embedding', use_auth_token=hf_token)
-    snapshot_download(repo_id='pyannote/speaker-diarization-2.1', use_auth_token=hf_token)
+    snapshot_download(repo_id='pyannote/embedding', token=hf_token)
+    print('pyannote/embedding downloaded.')
+    snapshot_download(repo_id='pyannote/speaker-diarization-2.1', token=hf_token)
+    print('pyannote/speaker-diarization-2.1 downloaded.')
 else:
-    print('WARNING: HF_TOKEN not set, skipping pyannote models download')
+    print('WARNING: No HF_TOKEN — skipping pyannote model downloads')
 "
+
 echo "All models downloaded successfully."

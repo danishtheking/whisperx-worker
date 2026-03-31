@@ -334,7 +334,7 @@ def diarize(audio, result, debug, huggingface_access_token, min_speakers, max_sp
     start_time = time.time_ns() / 1e6
 
     diarize_model = whisperx.DiarizationPipeline(model_name='pyannote/speaker-diarization@2.1',
-                                                 use_auth_token=huggingface_access_token, device=device)
+                                                 use_auth_token=huggingface_access_token or os.environ.get("HF_TOKEN"), device=device)
     diarize_segments = diarize_model(audio, min_speakers=min_speakers, max_speakers=max_speakers)
 
     result = whisperx.assign_word_speakers(diarize_segments, result)
