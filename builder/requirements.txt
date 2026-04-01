@@ -1,5 +1,7 @@
 # ---------- PyTorch CUDA 12.1 wheels ----------
---extra-index-url https://download.pytorch.org/whl/cu121
+# Use --index-url (not --extra-index-url) so torch comes from cu121, not PyPI
+--index-url https://download.pytorch.org/whl/cu121
+--extra-index-url https://pypi.org/simple/
 torch
 torchaudio
 
