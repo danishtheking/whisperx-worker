@@ -32,10 +32,13 @@ RUN mkdir -p /cache/models /root/.cache/torch /models/faster-whisper-large-v3
 # 4. Requirements file
 COPY builder/requirements.txt /builder/requirements.txt
 
-# 5. Python dependencies — pin numpy<2 BEFORE everything else
+# 5a. Install torch+torchaudio from cu121 ONLY (no PyPI fallback)
 RUN python3 -m pip install --upgrade pip \
  && python3 -m pip install "numpy<2.0" \
- && python3 -m pip install hf_transfer \
+ && python3 -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# 5b. Install remaining dependencies from PyPI
+RUN python3 -m pip install hf_transfer \
  && python3 -m pip install --no-cache-dir -r /builder/requirements.txt
 
 # 6. Local VAD model

@@ -1,9 +1,5 @@
-# ---------- PyTorch CUDA 12.1 wheels ----------
-# Use --index-url (not --extra-index-url) so torch comes from cu121, not PyPI
---index-url https://download.pytorch.org/whl/cu121
---extra-index-url https://pypi.org/simple/
-torch
-torchaudio
+# NOTE: torch and torchaudio are installed separately in the Dockerfile
+# with --index-url cu121 to avoid CUDA version mismatch.
 
 # ---------- main libs ----------
 whisperx
