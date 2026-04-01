@@ -2,11 +2,6 @@ FROM nvidia/cuda:12.3.2-cudnn9-runtime-ubuntu22.04
 
 RUN rm -f /etc/apt/sources.list.d/*.list
 
-# Install cuDNN 8 compat lib (pyannote VAD needs libcudnn_ops_infer.so.8)
-RUN apt-get update -y && \
-    apt-get install -y --no-install-recommends libcudnn8 && \
-    apt-get clean -y && rm -rf /var/lib/apt/lists/*
-
 SHELL ["/bin/bash", "-c"]
 ENV DEBIAN_FRONTEND=noninteractive
 ENV SHELL=/bin/bash

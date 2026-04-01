@@ -10,6 +10,13 @@ except ImportError:                          # pragma: no cover
 # VAD is lightweight so CPU is fine; main transcription still uses GPU via ctranslate2.
 import onnxruntime as _ort
 _ort.get_available_providers = lambda: ['CPUExecutionProvider']
+_OrigSession = _ort.InferenceSession
+class _CPUOnlySession(_OrigSession):
+    def __init__(self, *args, **kwargs):
+        kwargs.pop('providers', None)
+        kwargs['providers'] = ['CPUExecutionProvider']
+        super().__init__(*args, **kwargs)
+_ort.InferenceSession = _CPUOnlySession
 
 from pydub import AudioSegment
 from typing import Any
