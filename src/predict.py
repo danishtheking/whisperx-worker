@@ -4,6 +4,13 @@ try:
     from cog import BasePredictor, Input, Path, BaseModel
 except ImportError:                          # pragma: no cover
     from cog_stub import BasePredictor, Input, Path, BaseModel
+
+# Force onnxruntime to CPU only — avoids cuDNN 8 vs 9 crash.
+# cuDNN 9 ships with torch cu121, but onnxruntime needs cuDNN 8 for CUDA.
+# VAD is lightweight so CPU is fine; main transcription still uses GPU via ctranslate2.
+import onnxruntime as _ort
+_ort.get_available_providers = lambda: ['CPUExecutionProvider']
+
 from pydub import AudioSegment
 from typing import Any
 from whisperx.audio import N_SAMPLES, log_mel_spectrogram
