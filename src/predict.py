@@ -18,6 +18,19 @@ class _CPUOnlySession(_OrigSession):
         super().__init__(*args, **kwargs)
 _ort.InferenceSession = _CPUOnlySession
 
+# Patch huggingface_hub: whisperx uses deprecated 'use_auth_token', newer hub needs 'token'
+import huggingface_hub as _hfh
+for _fn_name in ('hf_hub_download', 'snapshot_download', 'model_info'):
+    _orig_fn = getattr(_hfh, _fn_name, None)
+    if _orig_fn:
+        def _make_patched(orig):
+            def _patched(*args, **kwargs):
+                if 'use_auth_token' in kwargs:
+                    kwargs['token'] = kwargs.pop('use_auth_token')
+                return orig(*args, **kwargs)
+            return _patched
+        setattr(_hfh, _fn_name, _make_patched(_orig_fn))
+
 from pydub import AudioSegment
 from typing import Any
 from whisperx.audio import N_SAMPLES, log_mel_spectrogram
