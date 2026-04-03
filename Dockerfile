@@ -47,6 +47,10 @@ RUN python3 -m pip install --upgrade pip \
 RUN python3 -m pip install hf_transfer \
  && python3 -m pip install --no-cache-dir -r /builder/requirements.txt
 
+# Patch whisperx diarize.py: replace use_auth_token with token (pyannote 3.3.2 compat)
+RUN sed -i 's/use_auth_token=use_auth_token/token=use_auth_token/g' /usr/local/lib/python3.10/dist-packages/whisperx/diarize.py \
+ && echo "Patched whisperx diarize.py: use_auth_token -> token"
+
 # Local VAD model
 COPY models/whisperx-vad-segmentation.bin /root/.cache/torch/whisperx-vad-segmentation.bin
 
