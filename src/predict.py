@@ -366,16 +366,24 @@ def diarize(audio, result, debug, huggingface_access_token, min_speakers, max_sp
     start_time = time.time_ns() / 1e6
 
     hf_token = huggingface_access_token or os.environ.get("HF_TOKEN")
-    # Try pyannote 2.1 (pre-downloaded) then 3.1
-    for model_name in ['pyannote/speaker-diarization-2.1', 'pyannote/speaker-diarization@2.1', 'pyannote/speaker-diarization-3.1']:
-        try:
-            diarize_model = whisperx.DiarizationPipeline(model_name=model_name,
-                                                         use_auth_token=hf_token, device=device)
-            if diarize_model is not None:
-                break
-        except Exception as e:
-            print(f"Failed to load {model_name}: {e}")
-            continue
+    diarize_model = None
+    # Try multiple model names and auth methods
+    for model_name in ['pyannote/speaker-diarization-2.1', 'pyannote/speaker-diarization@2.1']:
+        for auth_kwarg in [{'use_auth_token': hf_token}, {}]:
+            try:
+                print(f"Trying diarization model: {model_name} with auth: {list(auth_kwarg.keys())}")
+                diarize_model = whisperx.DiarizationPipeline(model_name=model_name,
+                                                             device=device, **auth_kwarg)
+                if diarize_model is not None:
+                    print(f"Successfully loaded: {model_name}")
+                    break
+            except Exception as e:
+                print(f"Failed {model_name}: {e}")
+                continue
+        if diarize_model is not None:
+            break
+    if diarize_model is None:
+        raise RuntimeError(f"Could not load any diarization model. HF_TOKEN set: {bool(hf_token)}")
     diarize_segments = diarize_model(audio, min_speakers=min_speakers, max_speakers=max_speakers)
 
     result = whisperx.assign_word_speakers(diarize_segments, result)
