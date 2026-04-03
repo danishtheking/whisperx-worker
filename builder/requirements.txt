@@ -3,7 +3,7 @@
 
 # ---------- main libs ----------
 whisperx
-pyannote.audio
+pyannote.audio>=2.1,<3.2
 speechbrain>=1.0.0
 ctranslate2
 
