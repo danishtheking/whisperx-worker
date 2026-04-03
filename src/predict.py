@@ -5,18 +5,9 @@ try:
 except ImportError:                          # pragma: no cover
     from cog_stub import BasePredictor, Input, Path, BaseModel
 
-# Force onnxruntime to CPU only — avoids cuDNN 8 vs 9 crash.
-# cuDNN 9 ships with torch cu121, but onnxruntime needs cuDNN 8 for CUDA.
-# VAD is lightweight so CPU is fine; main transcription still uses GPU via ctranslate2.
-import onnxruntime as _ort
-_ort.get_available_providers = lambda: ['CPUExecutionProvider']
-_OrigSession = _ort.InferenceSession
-class _CPUOnlySession(_OrigSession):
-    def __init__(self, *args, **kwargs):
-        kwargs.pop('providers', None)
-        kwargs['providers'] = ['CPUExecutionProvider']
-        super().__init__(*args, **kwargs)
-_ort.InferenceSession = _CPUOnlySession
+# cuDNN 8 is installed in this image (alongside cuDNN 9 from torch).
+# onnxruntime should find libcudnn_ops_infer.so.8 and use CUDA for VAD.
+# No monkey-patching needed — let onnxruntime use its default providers.
 
 # Patch huggingface_hub: whisperx uses deprecated 'use_auth_token', newer hub needs 'token'
 import huggingface_hub as _hfh
