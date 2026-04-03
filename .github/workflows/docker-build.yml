@@ -45,8 +45,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:ga-${{ github.run_number }}
+            ghcr.io/danishtheking/whisperx-diarize:latest
+            ghcr.io/danishtheking/whisperx-diarize:ga-${{ github.run_number }}
           secret-files: |
             hf_token=/tmp/hf_token
           cache-from: type=gha
