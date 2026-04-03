@@ -353,13 +353,28 @@ def diarize(audio, result, debug, huggingface_access_token, min_speakers, max_sp
     start_time = time.time_ns() / 1e6
 
     hf_token = huggingface_access_token or os.environ.get("HF_TOKEN")
-    # whisperx.DiarizationPipeline passes use_auth_token to pyannote Pipeline.from_pretrained
-    # pyannote 3.x still accepts use_auth_token (not 'token')
-    diarize_model = whisperx.DiarizationPipeline(model_name='pyannote/speaker-diarization@2.1',
-                                                 use_auth_token=hf_token, device=device)
-    diarize_segments = diarize_model(audio, min_speakers=min_speakers, max_speakers=max_speakers)
+    # Call pyannote DIRECTLY (bypass whisperx wrapper which passes broken use_auth_token)
+    from pyannote.audio import Pipeline as PyannotePipeline
+    pipeline = PyannotePipeline.from_pretrained("pyannote/speaker-diarization-3.1", token=hf_token)
+    pipeline = pipeline.to(torch.device(device))
 
-    result = whisperx.assign_word_speakers(diarize_segments, result)
+    # Run diarization
+    import whisperx.audio
+    diarize_kwargs = {}
+    if min_speakers is not None:
+        diarize_kwargs["min_speakers"] = min_speakers
+    if max_speakers is not None:
+        diarize_kwargs["max_speakers"] = max_speakers
+    diarize_segments = pipeline(audio, **diarize_kwargs)
+
+    # Convert pyannote output to whisperx format for assign_word_speakers
+    diarize_df = []
+    for turn, _, speaker in diarize_segments.itertracks(yield_label=True):
+        diarize_df.append({"start": turn.start, "end": turn.end, "speaker": speaker})
+    import pandas as pd
+    diarize_segments_df = pd.DataFrame(diarize_df)
+
+    result = whisperx.assign_word_speakers(diarize_segments_df, result)
 
     if debug:
         elapsed_time = time.time_ns() / 1e6 - start_time

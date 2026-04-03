@@ -23,5 +23,11 @@ print('pyannote/embedding downloaded')
 snapshot_download(repo_id='pyannote/segmentation', token=hf_token)
 print('pyannote/segmentation downloaded')
 
+snapshot_download(repo_id='pyannote/segmentation-3.0', token=hf_token)
+print('pyannote/segmentation-3.0 downloaded')
+
 snapshot_download(repo_id='pyannote/speaker-diarization-2.1', token=hf_token)
 print('pyannote/speaker-diarization-2.1 downloaded')
+
+snapshot_download(repo_id='pyannote/speaker-diarization-3.1', token=hf_token)
+print('pyannote/speaker-diarization-3.1 downloaded')
