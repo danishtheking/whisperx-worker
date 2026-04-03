@@ -20,5 +20,8 @@ if not hf_token:
 snapshot_download(repo_id='pyannote/embedding', token=hf_token)
 print('pyannote/embedding downloaded')
 
+snapshot_download(repo_id='pyannote/segmentation', token=hf_token)
+print('pyannote/segmentation downloaded')
+
 snapshot_download(repo_id='pyannote/speaker-diarization-2.1', token=hf_token)
 print('pyannote/speaker-diarization-2.1 downloaded')
