@@ -9,9 +9,10 @@ except ImportError:                          # pragma: no cover
 # onnxruntime should find libcudnn_ops_infer.so.8 and use CUDA for VAD.
 # No monkey-patching needed — let onnxruntime use its default providers.
 
-# Patch huggingface_hub: whisperx uses deprecated 'use_auth_token', newer hub needs 'token'
+# Patch ALL huggingface_hub functions: whisperx/pyannote use deprecated 'use_auth_token'
 import huggingface_hub as _hfh
-for _fn_name in ('hf_hub_download', 'snapshot_download', 'model_info'):
+for _fn_name in ('hf_hub_download', 'snapshot_download', 'model_info', 'cached_download',
+                 'hf_hub_url', 'list_repo_files', 'repo_info'):
     _orig_fn = getattr(_hfh, _fn_name, None)
     if _orig_fn:
         def _make_patched(orig):
@@ -21,6 +22,19 @@ for _fn_name in ('hf_hub_download', 'snapshot_download', 'model_info'):
                 return orig(*args, **kwargs)
             return _patched
         setattr(_hfh, _fn_name, _make_patched(_orig_fn))
+
+# Also patch pyannote Pipeline.from_pretrained to handle use_auth_token
+try:
+    from pyannote.audio import Pipeline as _Pipeline
+    _orig_from_pretrained = _Pipeline.from_pretrained
+    @classmethod
+    def _patched_from_pretrained(cls, *args, **kwargs):
+        if 'use_auth_token' in kwargs:
+            kwargs['token'] = kwargs.pop('use_auth_token')
+        return _orig_from_pretrained.__func__(cls, *args, **kwargs)
+    _Pipeline.from_pretrained = _patched_from_pretrained
+except Exception:
+    pass
 
 from pydub import AudioSegment
 from typing import Any
@@ -351,8 +365,17 @@ def align(audio, result, debug, custom_align_model=None):
 def diarize(audio, result, debug, huggingface_access_token, min_speakers, max_speakers):
     start_time = time.time_ns() / 1e6
 
-    diarize_model = whisperx.DiarizationPipeline(model_name='pyannote/speaker-diarization@2.1',
-                                                 use_auth_token=huggingface_access_token or os.environ.get("HF_TOKEN"), device=device)
+    hf_token = huggingface_access_token or os.environ.get("HF_TOKEN")
+    # Try pyannote 2.1 (pre-downloaded) then 3.1
+    for model_name in ['pyannote/speaker-diarization-2.1', 'pyannote/speaker-diarization@2.1', 'pyannote/speaker-diarization-3.1']:
+        try:
+            diarize_model = whisperx.DiarizationPipeline(model_name=model_name,
+                                                         use_auth_token=hf_token, device=device)
+            if diarize_model is not None:
+                break
+        except Exception as e:
+            print(f"Failed to load {model_name}: {e}")
+            continue
     diarize_segments = diarize_model(audio, min_speakers=min_speakers, max_speakers=max_speakers)
 
     result = whisperx.assign_word_speakers(diarize_segments, result)
