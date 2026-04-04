@@ -159,7 +159,13 @@ class Predictor(BasePredictor):
         with torch.inference_mode():
             asr_options = {
                 "temperatures": [temperature],
-                "initial_prompt": initial_prompt
+                "initial_prompt": initial_prompt,
+                # Anti-hallucination settings
+                "condition_on_previous_text": False,       # Don't condition on prev text (prevents snowball hallucinations)
+                "no_speech_threshold": 0.6,                # Higher = more aggressive silence detection
+                "repetition_penalty": 1.15,                # Penalize repeated tokens
+                "no_repeat_ngram_size": 3,                 # Block repeating 3-grams (prevents "subscribe subscribe subscribe")
+                "hallucination_silence_threshold": 1.0,    # Skip segments where audio is mostly silent (>1s)
             }
 
             vad_options = {
