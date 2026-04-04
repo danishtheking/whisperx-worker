@@ -51,25 +51,16 @@ RUN python3 -m pip install hf_transfer \
 RUN sed -i 's/use_auth_token=use_auth_token/token=use_auth_token/g' /usr/local/lib/python3.10/dist-packages/whisperx/diarize.py \
  && echo "Patched whisperx diarize.py: use_auth_token -> token"
 
-# Local VAD model
+# Local VAD model (small, ~18MB — keep baked in)
 COPY models/whisperx-vad-segmentation.bin /root/.cache/torch/whisperx-vad-segmentation.bin
 
-# Download Faster Whisper model (separate layer ~3GB)
-RUN wget -q -O /models/faster-whisper-large-v3/config.json "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main/config.json" && \
-    wget -q -O /models/faster-whisper-large-v3/model.bin "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main/model.bin" && \
-    wget -q -O /models/faster-whisper-large-v3/preprocessor_config.json "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main/preprocessor_config.json" && \
-    wget -q -O /models/faster-whisper-large-v3/tokenizer.json "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main/tokenizer.json" && \
-    wget -q -O /models/faster-whisper-large-v3/vocabulary.json "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main/vocabulary.json" && \
-    echo "Faster Whisper model downloaded"
-
-# Download SpeechBrain ECAPA model (separate layer)
-RUN python3 -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='speechbrain/spkrec-ecapa-voxceleb'); print('SpeechBrain ECAPA downloaded')"
-
-# Download PyAnnote models (separate layer, needs HF token)
-COPY builder/download_pyannote.py /builder/download_pyannote.py
-RUN --mount=type=secret,id=hf_token python3 /builder/download_pyannote.py
+# ── SLIM IMAGE: Models download at startup instead of bake-in ──
+# This keeps the Docker image ~4GB instead of ~12GB
+# Models are cached on the container disk after first download
+COPY builder/download_models_startup.py /builder/download_models_startup.py
 
 # Application code
 COPY src .
 
+# Startup: download models (if not cached) then run worker
 CMD ["python3", "-u", "/rp_handler.py"]

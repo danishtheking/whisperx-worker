@@ -29,6 +29,15 @@ logger.addHandler(file_handler)
 
 logger.info("=== rp_handler.py starting ===")
 
+# ── 0b) Download models if not already present (slim image) ─────────
+try:
+    sys.path.insert(0, "/builder")
+    from download_models_startup import download_all_models
+    download_all_models()
+except Exception as e:
+    logger.error(f"Model download failed: {e}", exc_info=True)
+    # Continue anyway — models might already be cached
+
 # ── 1) Environment & HF auth ─────────────────────────────────────────
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv())
