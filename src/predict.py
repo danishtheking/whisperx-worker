@@ -352,10 +352,10 @@ def align(audio, result, debug, custom_align_model=None):
 def diarize(audio, result, debug, huggingface_access_token, min_speakers, max_speakers):
     start_time = time.time_ns() / 1e6
 
-    hf_token = huggingface_access_token or os.environ.get("HF_TOKEN")
-    # Call pyannote DIRECTLY (bypass whisperx wrapper which passes broken use_auth_token)
+    # Call pyannote DIRECTLY (bypass whisperx wrapper)
+    # Don't pass token — models are pre-downloaded, HF_TOKEN env var is set
     from pyannote.audio import Pipeline as PyannotePipeline
-    pipeline = PyannotePipeline.from_pretrained("pyannote/speaker-diarization-3.1", token=hf_token)
+    pipeline = PyannotePipeline.from_pretrained("pyannote/speaker-diarization-3.1")
     pipeline = pipeline.to(torch.device(device))
 
     # Run diarization
