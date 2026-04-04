@@ -382,7 +382,7 @@ def diarize(audio, result, debug, huggingface_access_token, min_speakers, max_sp
 
     gc.collect()
     torch.cuda.empty_cache()
-    del diarize_model
+    del pipeline
 
     return result
 
