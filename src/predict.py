@@ -235,7 +235,7 @@ class Predictor(BasePredictor):
                           f"You can provide a custom alignment model using the 'custom_align_model' parameter.")
 
             if diarization:
-                result = diarize(audio, result, debug, huggingface_access_token, min_speakers, max_speakers)
+                result = diarize(audio_file, result, debug, huggingface_access_token, min_speakers, max_speakers)
 
             if debug:
                 print(f"max gpu memory allocated over runtime: {torch.cuda.max_memory_reserved() / (1024 ** 3):.2f} GB")
