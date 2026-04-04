@@ -5,6 +5,7 @@ import logging
 import math
 import copy
 import shutil
+import json
 
 # ── 0) Logging FIRST so we can see any crash ──────────────────────────
 logger = logging.getLogger("rp_handler")
@@ -121,24 +122,40 @@ def cleanup_job_files(job_id, jobs_directory='/jobs'):
 
 
 def _to_jsonable(obj: Any):
+    """Recursively convert an object to JSON-safe types."""
     if isinstance(obj, dict):
-        return {k: _to_jsonable(v) for k, v in obj.items()}
+        return {str(k): _to_jsonable(v) for k, v in obj.items()}
     if isinstance(obj, (list, tuple)):
         return [_to_jsonable(v) for v in obj]
+    if isinstance(obj, np.ndarray):
+        return _to_jsonable(obj.tolist())
     if isinstance(obj, np.generic):
-        obj = obj.item()
+        return _to_jsonable(obj.item())
     if isinstance(obj, float):
         if math.isnan(obj) or math.isinf(obj):
             return None
-        return obj
-    if isinstance(obj, np.ndarray):
-        return _to_jsonable(obj.tolist())
+        return round(obj, 6)  # limit decimal precision
     if isinstance(obj, (int, str, bool)) or obj is None:
         return obj
+    if isinstance(obj, bytes):
+        return obj.decode("utf-8", errors="replace")
     try:
         return str(obj)
     except Exception:
         return None
+
+
+def _safe_json_output(obj):
+    """Ensure output is 100% JSON-serializable. Last line of defense."""
+    try:
+        cleaned = _to_jsonable(obj)
+        # Verify it can actually be serialized
+        json.dumps(cleaned)
+        return cleaned
+    except (TypeError, ValueError, OverflowError) as e:
+        logger.error(f"JSON serialization failed: {e}", exc_info=True)
+        # Return minimal safe output
+        return {"error": f"Output serialization failed: {str(e)}"}
 
 
 # ── Main handler ─────────────────────────────────────────────────────
@@ -150,7 +167,8 @@ def run(job):
     # Validate basic schema
     validated = validate(job_input, INPUT_VALIDATIONS)
     if "errors" in validated:
-        return {"error": validated["errors"]}
+        logger.error(f"Validation errors: {validated['errors']}")
+        return _safe_json_output({"error": str(validated["errors"])})
 
     # 1) Obtain primary audio
     audio_file_path = None
@@ -167,7 +185,7 @@ def run(job):
             logger.debug(f"Audio downloaded -> {audio_file_path}")
     except Exception as e:
         logger.error("Audio acquisition failed", exc_info=True)
-        return {"error": f"audio acquisition: {e}"}
+        return _safe_json_output({"error": f"audio acquisition: {str(e)}"})
 
     # 2) Download speaker profiles (optional)
     speaker_profiles = job_input.get("speaker_samples", [])
@@ -208,7 +226,7 @@ def run(job):
         result = MODEL.predict(**predict_input)
     except Exception as e:
         logger.error("WhisperX prediction failed", exc_info=True)
-        return {"error": f"prediction: {e}"}
+        return _safe_json_output({"error": f"prediction: {str(e)}"})
 
     output_dict.update({
         "segments": result.segments,
@@ -216,10 +234,8 @@ def run(job):
     })
 
     # Sanitize output to valid JSON
-    try:
-        output_dict = _to_jsonable(output_dict)
-    except Exception:
-        logger.warning("Failed to sanitize output; attempting to continue.", exc_info=True)
+    output_dict = _safe_json_output(output_dict)
+    logger.info(f"Output segments count: {len(output_dict.get('segments', []))}")
 
     # 4) Speaker verification (optional)
     if embeddings:
@@ -246,6 +262,9 @@ def run(job):
     except Exception as e:
         logger.warning(f"Cleanup issue: {e}", exc_info=True)
 
+    # Final safety check — ensure output is JSON-safe
+    output_dict = _safe_json_output(output_dict)
+    logger.info(f"Returning output ({len(json.dumps(output_dict))} bytes)")
     return output_dict
 
 
