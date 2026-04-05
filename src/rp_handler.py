@@ -145,6 +145,59 @@ def _to_jsonable(obj: Any):
         return None
 
 
+def _has_devanagari(text):
+    """Check if text contains Devanagari script characters."""
+    return any('\u0900' <= c <= '\u097F' for c in text)
+
+
+def _romanize_text(text):
+    """Convert Devanagari text to Romanized (Hinglish), preserving English parts."""
+    try:
+        from indic_transliteration import sanscript
+        from indic_transliteration.sanscript import transliterate
+
+        # Split text into Devanagari and non-Devanagari chunks
+        result = []
+        current_chunk = []
+        is_devanagari = False
+
+        for char in text:
+            char_is_dev = '\u0900' <= char <= '\u097F'
+            if char_is_dev != is_devanagari and current_chunk:
+                chunk_text = ''.join(current_chunk)
+                if is_devanagari:
+                    chunk_text = transliterate(chunk_text, sanscript.DEVANAGARI, sanscript.ITRANS)
+                    # Clean up ITRANS artifacts for readability
+                    chunk_text = chunk_text.replace('.a', 'a').replace('~N', 'n')
+                result.append(chunk_text)
+                current_chunk = []
+            is_devanagari = char_is_dev
+            current_chunk.append(char)
+
+        if current_chunk:
+            chunk_text = ''.join(current_chunk)
+            if is_devanagari:
+                chunk_text = transliterate(chunk_text, sanscript.DEVANAGARI, sanscript.ITRANS)
+                chunk_text = chunk_text.replace('.a', 'a').replace('~N', 'n')
+            result.append(chunk_text)
+
+        return ''.join(result)
+    except Exception as e:
+        logger.warning(f"Transliteration failed: {e}")
+        return text
+
+
+def _romanize_segments(segments):
+    """Romanize Devanagari text in all segments."""
+    romanized = []
+    for seg in segments:
+        text = seg.get("text", "")
+        if _has_devanagari(text):
+            seg = {**seg, "text": _romanize_text(text)}
+        romanized.append(seg)
+    return romanized
+
+
 def _safe_json_output(obj):
     """Ensure output is 100% JSON-serializable. Last line of defense."""
     try:
@@ -232,6 +285,11 @@ def run(job):
         "segments": result.segments,
         "detected_language": result.detected_language,
     })
+
+    # Transliterate Devanagari → Romanized (Hinglish) for Hindi/Marathi/etc.
+    romanize = job_input.get("romanize", True)  # Default ON
+    if romanize and output_dict.get("segments"):
+        output_dict["segments"] = _romanize_segments(output_dict["segments"])
 
     # Sanitize output to valid JSON
     output_dict = _safe_json_output(output_dict)

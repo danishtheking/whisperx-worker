@@ -230,15 +230,17 @@ class Predictor(BasePredictor):
             torch.cuda.empty_cache()
             del model
 
-            if align_output:
-                # Allow alignment if language is supported OR if a custom model is provided
-                if (detected_language in whisperx.alignment.DEFAULT_ALIGN_MODELS_TORCH or 
-                    detected_language in whisperx.alignment.DEFAULT_ALIGN_MODELS_HF or 
+            # Always align when diarization is enabled — word-level timestamps
+            # are critical for accurate speaker assignment
+            needs_align = align_output or diarization
+            if needs_align:
+                if (detected_language in whisperx.alignment.DEFAULT_ALIGN_MODELS_TORCH or
+                    detected_language in whisperx.alignment.DEFAULT_ALIGN_MODELS_HF or
                     custom_align_model is not None):
                     result = align(audio, result, debug, custom_align_model)
                 else:
-                    print(f"Cannot align output as language {detected_language} is not supported for alignment. "
-                          f"You can provide a custom alignment model using the 'custom_align_model' parameter.")
+                    print(f"Warning: Cannot align for language {detected_language}. "
+                          f"Diarization accuracy may be reduced without word-level timestamps.")
 
             if diarization:
                 result = diarize(audio_file, result, debug, huggingface_access_token, min_speakers, max_speakers)

@@ -19,3 +19,4 @@ huggingface-hub
 runpod
 cryptography
 python-dotenv
+indic-transliteration       # Devanagari -> Romanized (Hinglish) conversion
