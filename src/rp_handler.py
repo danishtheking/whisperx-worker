@@ -308,10 +308,9 @@ def run(job):
         "detected_language": result.detected_language,
     })
 
-    # Transliterate Devanagari → Romanized (Hinglish) for Hindi/Marathi/etc.
-    romanize = job_input.get("romanize", True)  # Default ON
-    if romanize and output_dict.get("segments"):
-        output_dict["segments"] = _romanize_segments(output_dict["segments"])
+    # NOTE: Devanagari → Hinglish conversion is handled downstream by the bot
+    # service using AI (OpenAI/Groq) for natural, readable output.
+    # Character-level transliteration produces unreadable results.
 
     # Sanitize output to valid JSON
     output_dict = _safe_json_output(output_dict)
