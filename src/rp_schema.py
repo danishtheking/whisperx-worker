@@ -87,5 +87,10 @@ INPUT_VALIDATIONS = {
         'type': str,
         'required': False,
         'default': None
+    },
+    'romanize': {
+        'type': bool,
+        'required': False,
+        'default': True
     }
 }
