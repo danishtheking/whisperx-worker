@@ -1,11 +1,11 @@
 # NOTE: torch and torchaudio are installed separately in the Dockerfile
 # with --index-url cu121 to avoid CUDA version mismatch.
 
-# ---------- main libs ----------
-whisperx
-pyannote.audio
-speechbrain>=1.0.0
-ctranslate2
+# ---------- main libs (pinned for consistent builds) ----------
+whisperx>=3.3.0,<4.0
+pyannote.audio>=3.3.0,<4.0
+speechbrain>=1.0.0,<2.0
+ctranslate2>=4.0.0,<5.0
 
 # ---------- speechbrain dependencies ----------
 sentencepiece
@@ -19,4 +19,3 @@ huggingface-hub
 runpod
 cryptography
 python-dotenv
-indic-transliteration       # Devanagari -> Romanized (Hinglish) conversion

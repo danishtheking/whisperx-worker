@@ -145,79 +145,50 @@ def _to_jsonable(obj: Any):
         return None
 
 
-def _has_devanagari(text):
-    """Check if text contains Devanagari script characters."""
-    return any('\u0900' <= c <= '\u097F' for c in text)
-
-
-def _romanize_text(text):
-    """Convert Devanagari text to casual Hinglish, preserving English parts."""
-    try:
-        from indic_transliteration import sanscript
-        from indic_transliteration.sanscript import transliterate
-
-        # Split text into Devanagari and non-Devanagari chunks
-        result = []
-        current_chunk = []
-        is_devanagari = False
-
-        for char in text:
-            char_is_dev = '\u0900' <= char <= '\u097F'
-            if char_is_dev != is_devanagari and current_chunk:
-                chunk_text = ''.join(current_chunk)
-                if is_devanagari:
-                    chunk_text = transliterate(chunk_text, sanscript.DEVANAGARI, sanscript.IAST)
-                    chunk_text = _iast_to_hinglish(chunk_text)
-                result.append(chunk_text)
-                current_chunk = []
-            is_devanagari = char_is_dev
-            current_chunk.append(char)
-
-        if current_chunk:
-            chunk_text = ''.join(current_chunk)
-            if is_devanagari:
-                chunk_text = transliterate(chunk_text, sanscript.DEVANAGARI, sanscript.IAST)
-                chunk_text = _iast_to_hinglish(chunk_text)
-            result.append(chunk_text)
-
-        return ''.join(result)
-    except Exception as e:
-        logger.warning(f"Transliteration failed: {e}")
-        return text
-
-
-def _iast_to_hinglish(text):
-    """Convert IAST transliteration to casual Hinglish.
-    IAST: ā ī ū ṭ ḍ ṇ ś ṣ ṃ ḥ ṅ ñ
-    Hinglish: aa ee oo t d n sh sh m h n n
-    """
-    import re
-    replacements = [
-        ('ā', 'aa'), ('ī', 'ee'), ('ū', 'oo'),
-        ('ṭ', 't'), ('ḍ', 'd'), ('ṇ', 'n'),
-        ('ś', 'sh'), ('ṣ', 'sh'), ('ṃ', 'n'),
-        ('ḥ', 'h'), ('ṅ', 'n'), ('ñ', 'n'),
-        ('ṛ', 'ri'), ('ḷ', 'l'),
-        ('Ā', 'Aa'), ('Ī', 'Ee'), ('Ū', 'Oo'),
-        ('Ṭ', 'T'), ('Ḍ', 'D'), ('Ṇ', 'N'),
-        ('Ś', 'Sh'), ('Ṣ', 'Sh'),
-    ]
-    for old, new in replacements:
-        text = text.replace(old, new)
-    # Remove remaining diacritics
-    text = re.sub(r'[̄̂̃̈]', '', text)
-    return text
-
-
-def _romanize_segments(segments):
-    """Romanize Devanagari text in all segments."""
-    romanized = []
+def _filter_hallucinations(segments):
+    """Filter hallucinated segments from Whisper output.
+    Catches: repeated phrases, empty segments, known hallucination patterns.
+    Works for ANY language — no language-specific patterns needed."""
+    filtered = []
     for seg in segments:
-        text = seg.get("text", "")
-        if _has_devanagari(text):
-            seg = {**seg, "text": _romanize_text(text)}
-        romanized.append(seg)
-    return romanized
+        text = (seg.get("text") or "").strip()
+
+        # Skip empty
+        if not text:
+            continue
+
+        # Skip very short segments with only punctuation
+        if len(text) < 3:
+            continue
+
+        words = text.split()
+
+        # Skip if all words are the same (e.g. "subscribe subscribe subscribe")
+        if len(words) >= 3:
+            unique = set(w.lower() for w in words)
+            if len(unique) == 1:
+                continue
+
+        # Skip if 2-word phrase repeats 3+ times (e.g. "thank you thank you thank you")
+        if len(words) >= 6:
+            bigram = f"{words[0]} {words[1]}".lower()
+            bigrams = []
+            for i in range(0, len(words) - 1, 2):
+                bigrams.append(f"{words[i]} {words[i+1]}".lower())
+            if len(bigrams) >= 3 and all(b == bigram for b in bigrams):
+                continue
+
+        # Skip if segment is mostly the same word repeated (>70% same word)
+        if len(words) >= 4:
+            from collections import Counter
+            word_counts = Counter(w.lower() for w in words)
+            most_common_count = word_counts.most_common(1)[0][1]
+            if most_common_count / len(words) > 0.7:
+                continue
+
+        filtered.append(seg)
+
+    return filtered
 
 
 def _safe_json_output(obj):
@@ -292,8 +263,8 @@ def run(job):
         "custom_align_model": job_input.get("custom_align_model"),
         "diarization": job_input.get("diarization", False),
         "huggingface_access_token": job_input.get("huggingface_access_token") or hf_token,
-        "min_speakers": job_input.get("min_speakers"),
-        "max_speakers": job_input.get("max_speakers"),
+        "min_speakers": job_input.get("min_speakers") or 2,     # Meetings always have 2+ speakers
+        "max_speakers": job_input.get("max_speakers"),           # None = let pyannote auto-detect
         "debug": job_input.get("debug", False),
     }
 
@@ -308,9 +279,13 @@ def run(job):
         "detected_language": result.detected_language,
     })
 
-    # NOTE: Devanagari → Hinglish conversion is handled downstream by the bot
-    # service using AI (OpenAI/Groq) for natural, readable output.
-    # Character-level transliteration produces unreadable results.
+    # Filter hallucinated segments at worker level (before returning)
+    if output_dict.get("segments"):
+        before_count = len(output_dict["segments"])
+        output_dict["segments"] = _filter_hallucinations(output_dict["segments"])
+        after_count = len(output_dict["segments"])
+        if before_count != after_count:
+            logger.info(f"Hallucination filter: removed {before_count - after_count} segments")
 
     # Sanitize output to valid JSON
     output_dict = _safe_json_output(output_dict)

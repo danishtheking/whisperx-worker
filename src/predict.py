@@ -158,14 +158,15 @@ class Predictor(BasePredictor):
     ) -> Output:
         with torch.inference_mode():
             asr_options = {
-                "temperatures": [temperature],
+                "temperatures": [temperature, 0.2, 0.4, 0.6, 0.8, 1.0] if temperature == 0 else [temperature],
                 "initial_prompt": initial_prompt,
-                # Anti-hallucination settings
-                "condition_on_previous_text": False,       # Don't condition on prev text (prevents snowball hallucinations)
-                "no_speech_threshold": 0.6,                # Higher = more aggressive silence detection
-                "repetition_penalty": 1.15,                # Penalize repeated tokens
-                "no_repeat_ngram_size": 3,                 # Block repeating 3-grams (prevents "subscribe subscribe subscribe")
-                "hallucination_silence_threshold": 1.0,    # Skip segments where audio is mostly silent (>1s)
+                "condition_on_previous_text": False,       # Prevents snowball hallucinations
+                "no_speech_threshold": 0.6,                # Detect silence
+                "compression_ratio_threshold": 2.4,        # Filter hallucinated segments (high compression)
+                "beam_size": 5,                            # Better accuracy (searches more possibilities)
+                # NOTE: no_repeat_ngram_size and repetition_penalty intentionally REMOVED
+                # They block legitimate non-English phrases (e.g. "acha acha" in Hindi)
+                # and cause missing words. Hallucinations handled by post-filter instead.
             }
 
             vad_options = {
@@ -173,32 +174,10 @@ class Predictor(BasePredictor):
                 "vad_offset": vad_offset
             }
 
-            audio_duration = get_audio_duration(audio_file)
-
-            if language is None and language_detection_min_prob > 0 and audio_duration > 30000:
-                segments_duration_ms = 30000
-
-                language_detection_max_tries = min(
-                    language_detection_max_tries,
-                    math.floor(audio_duration / segments_duration_ms)
-                )
-
-                segments_starts = distribute_segments_equally(audio_duration, segments_duration_ms,
-                                                              language_detection_max_tries)
-
-                print("Detecting languages on segments starting at " + ', '.join(map(str, segments_starts)))
-
-                detected_language_details = detect_language(audio_file, segments_starts, language_detection_min_prob,
-                                                            language_detection_max_tries, asr_options, vad_options)
-
-                detected_language_code = detected_language_details["language"]
-                detected_language_prob = detected_language_details["probability"]
-                detected_language_iterations = detected_language_details["iterations"]
-
-                print(f"Detected language {detected_language_code} ({detected_language_prob:.2f}) after "
-                      f"{detected_language_iterations} iterations.")
-
-                language = detected_language_details["language"]
+            # Language handling: when language=None, let Whisper auto-detect per chunk.
+            # Do NOT run recursive language detection — it forces ONE language on the
+            # entire file, which breaks code-switched audio (e.g. Hindi + English).
+            # Whisper natively detects language per ~30s chunk when language=None.
 
             start_time = time.time_ns() / 1e6
 
