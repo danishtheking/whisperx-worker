@@ -151,7 +151,7 @@ def _has_devanagari(text):
 
 
 def _romanize_text(text):
-    """Convert Devanagari text to Romanized (Hinglish), preserving English parts."""
+    """Convert Devanagari text to casual Hinglish, preserving English parts."""
     try:
         from indic_transliteration import sanscript
         from indic_transliteration.sanscript import transliterate
@@ -166,9 +166,8 @@ def _romanize_text(text):
             if char_is_dev != is_devanagari and current_chunk:
                 chunk_text = ''.join(current_chunk)
                 if is_devanagari:
-                    chunk_text = transliterate(chunk_text, sanscript.DEVANAGARI, sanscript.ITRANS)
-                    # Clean up ITRANS artifacts for readability
-                    chunk_text = chunk_text.replace('.a', 'a').replace('~N', 'n')
+                    chunk_text = transliterate(chunk_text, sanscript.DEVANAGARI, sanscript.IAST)
+                    chunk_text = _iast_to_hinglish(chunk_text)
                 result.append(chunk_text)
                 current_chunk = []
             is_devanagari = char_is_dev
@@ -177,14 +176,37 @@ def _romanize_text(text):
         if current_chunk:
             chunk_text = ''.join(current_chunk)
             if is_devanagari:
-                chunk_text = transliterate(chunk_text, sanscript.DEVANAGARI, sanscript.ITRANS)
-                chunk_text = chunk_text.replace('.a', 'a').replace('~N', 'n')
+                chunk_text = transliterate(chunk_text, sanscript.DEVANAGARI, sanscript.IAST)
+                chunk_text = _iast_to_hinglish(chunk_text)
             result.append(chunk_text)
 
         return ''.join(result)
     except Exception as e:
         logger.warning(f"Transliteration failed: {e}")
         return text
+
+
+def _iast_to_hinglish(text):
+    """Convert IAST transliteration to casual Hinglish.
+    IAST: ā ī ū ṭ ḍ ṇ ś ṣ ṃ ḥ ṅ ñ
+    Hinglish: aa ee oo t d n sh sh m h n n
+    """
+    import re
+    replacements = [
+        ('ā', 'aa'), ('ī', 'ee'), ('ū', 'oo'),
+        ('ṭ', 't'), ('ḍ', 'd'), ('ṇ', 'n'),
+        ('ś', 'sh'), ('ṣ', 'sh'), ('ṃ', 'n'),
+        ('ḥ', 'h'), ('ṅ', 'n'), ('ñ', 'n'),
+        ('ṛ', 'ri'), ('ḷ', 'l'),
+        ('Ā', 'Aa'), ('Ī', 'Ee'), ('Ū', 'Oo'),
+        ('Ṭ', 'T'), ('Ḍ', 'D'), ('Ṇ', 'N'),
+        ('Ś', 'Sh'), ('Ṣ', 'Sh'),
+    ]
+    for old, new in replacements:
+        text = text.replace(old, new)
+    # Remove remaining diacritics
+    text = re.sub(r'[̄̂̃̈]', '', text)
+    return text
 
 
 def _romanize_segments(segments):
