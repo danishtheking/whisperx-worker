@@ -60,4 +60,7 @@ COPY builder/download_models_startup.py /builder/download_models_startup.py
 # Application code
 COPY src .
 
+# Test input for pod mode (serverless handler uses this when no queue)
+COPY test_input.json /test_input.json
+
 CMD ["python3", "-u", "/rp_handler.py"]

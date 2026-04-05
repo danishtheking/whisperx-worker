@@ -1,0 +1,9 @@
+{
+  "input": {
+    "audio_file": "https://drive.usercontent.google.com/download?id=11zK_gavrM7-GWvPZEqOyNLAxgPIHtyat&export=download&confirm=t",
+    "diarization": true,
+    "batch_size": 8,
+    "min_speakers": 2,
+    "debug": true
+  }
+}
